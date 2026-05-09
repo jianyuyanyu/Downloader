@@ -30,16 +30,17 @@ jobs:
 
       - name: Increase file descriptor limit
         run: |
-          ulimit -n 1048576 || true
-          echo "fs.file-max=2097152" | sudo tee -a /etc/sysctl.conf
-          sudo sysctl -p
-          # Persist for subsequent shells in this job
-          echo "* soft nofile 1048576" | sudo tee -a /etc/security/limits.conf
-          echo "* hard nofile 1048576" | sudo tee -a /etc/security/limits.conf
+          # Best-effort: raise soft limit up to current hard limit
+          HARD=$(ulimit -Hn)
+          echo "Current hard nofile limit: $HARD"
+          ulimit -Sn "$HARD" || true
+          ulimit -n
 
       - name: Run tests and collect coverage
         run: |
-          ulimit -n 1048576
+          # Raise soft limit to hard limit (don't fail the job if not permitted)
+          ulimit -Sn "$(ulimit -Hn)" || true
+          ulimit -n
           dotnet test -c Release ./src --verbosity normal --no-build --no-restore \
           --collect:"XPlat Code Coverage" --results-directory ./TestResults/ \
           /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura \
