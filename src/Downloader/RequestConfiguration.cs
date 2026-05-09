@@ -13,6 +13,8 @@ namespace Downloader;
 /// </summary>
 public class RequestConfiguration
 {
+    private static readonly Version ZeroVersion = new(0, 0, 0, 0);
+
     /// <summary>
     /// Initializes a new instance of the <see cref="RequestConfiguration"/> class with default settings.
     /// </summary>
@@ -29,7 +31,53 @@ public class RequestConfiguration
         Pipelined = true;
         ProtocolVersion = HttpVersion.Version11;
         ConnectTimeout = 30 * 1000; // 30 seconds
-        UserAgent = $"{nameof(Downloader)}/{Assembly.GetExecutingAssembly().GetName().Version?.ToString(3)}";
+        UserAgent = BuildDefaultUserAgent();
+    }
+
+    private static string BuildDefaultUserAgent()
+    {
+        const string fallbackVersion = "5.0";
+        string version = ResolveProductVersion();
+        return $"{nameof(Downloader)}/{version ?? fallbackVersion}";
+    }
+
+    private static string ResolveProductVersion()
+    {
+        Assembly assembly = typeof(RequestConfiguration).Assembly;
+
+        string version = NormalizeVersion(assembly.GetName().Version?.ToString(3));
+        if (!string.IsNullOrWhiteSpace(version))
+            return version;
+
+        version = NormalizeVersion(assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+        if (!string.IsNullOrWhiteSpace(version))
+            return version;
+
+        version = NormalizeVersion(assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version);
+        if (!string.IsNullOrWhiteSpace(version))
+            return version;
+
+        return null;
+    }
+
+    private static string NormalizeVersion(string versionText)
+    {
+        if (string.IsNullOrWhiteSpace(versionText))
+            return null;
+
+        string candidate = versionText.Trim();
+        int metadataSeparatorIndex = candidate.IndexOf('+');
+        if (metadataSeparatorIndex >= 0)
+            candidate = candidate[..metadataSeparatorIndex];
+
+        int preReleaseSeparatorIndex = candidate.IndexOf('-');
+        if (preReleaseSeparatorIndex >= 0)
+            candidate = candidate[..preReleaseSeparatorIndex];
+
+        if (!Version.TryParse(candidate, out Version parsed) || parsed == ZeroVersion)
+            return null;
+
+        return parsed.Build >= 0 ? parsed.ToString(3) : parsed.ToString(2);
     }
 
     /// <summary>
